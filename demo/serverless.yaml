@@ -12,7 +12,6 @@ provider:
     OWNER:                      ${self:custom.owner_tag}
 
 custom:
-  var1:                         value1
   owner_tag:                    DOJO_CW
   sqsName:                      ${self:service}-sqs-${self:provider.stage}
   s3Name:                       ${self:service}-s3-${self:provider.stage}
@@ -31,8 +30,6 @@ functions:
   consumer:
     description:                Consumes & processes SQS message
     handler:                    lambda/consumer.handler
-    environment:
-      ENV_VAR1:                 ${self:custom.var1}
     events:
       - sqs:
           arn:
