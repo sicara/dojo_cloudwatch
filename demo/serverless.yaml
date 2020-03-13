@@ -1,0 +1,197 @@
+service:                        demo
+
+provider:
+  name:                         aws
+  region:                       eu-west-1
+  runtime:                      python3.7
+  stage:                        sandbox
+  role:                         arn:aws:iam::570916004030:role/dojoCW-lambdaRole
+  memorySize:                   128
+  timeout:                      10
+  tags:
+    OWNER:                      ${self:custom.owner_tag}
+
+custom:
+  var1:                         value1
+  owner_tag:                    DOJO_CW
+  sqsName:                      ${self:service}-sqs-${self:provider.stage}
+  s3Name:                       ${self:service}-s3-${self:provider.stage}
+  ddbName:                      ${self:service}-ddb-${self:provider.stage}
+  dashboardName:                ${self:service}-dashboard-${self:provider.stage}
+
+functions:
+  producer:
+    description:                Produces tasks sent to SQS
+    handler:                    lambda/producer.handler
+    environment:
+      SQS_QUEUE_NAME:           ${self:custom.sqsName}
+    events:
+      - schedule:               cron(0 8 * * ? *)
+
+  consumer:
+    description:                Consumes & processes SQS message
+    handler:                    lambda/consumer.handler
+    environment:
+      ENV_VAR1:                 ${self:custom.var1}
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt:
+              - SQSDemo
+              - Arn
+          batchSize:            1
+
+resources:
+  Resources:
+    SQSDemo:
+      Type:                     AWS::SQS::Queue
+      Properties:
+        QueueName:              ${self:custom.sqsName}
+        VisibilityTimeout:      1800
+        Tags:
+          - Key:                OWNER
+            Value:              ${self:custom.owner_tag}
+    S3Demo:
+      Type:                     AWS::S3::Bucket
+      Properties:
+        BucketName:             ${self:custom.s3Name}
+        Tags:
+          - Key:                OWNER
+            Value:              ${self:custom.owner_tag}
+    DynamoDBDemo:
+      Type:                     AWS::DynamoDB::Table
+      Properties:
+        TableName:              ${self:custom.ddbName}
+        AttributeDefinitions:
+          - AttributeName:      "_id"
+            AttributeType:      "S"
+        KeySchema:
+          - AttributeName:      "_id"
+            KeyType:            "HASH"
+        BillingMode:            PAY_PER_REQUEST
+        Tags:
+          - Key:                OWNER
+            Value:              ${self:custom.owner_tag}
+    MetricsDashboard:
+      Type: AWS::CloudWatch::Dashboard
+      Properties:
+        DashboardName:          ${self:custom.dashboardName}
+        DashboardBody:          !Sub
+          '{
+               "start": "-PT1H",
+               "widgets": [
+                   {
+                       "type": "metric",
+                       "x": 0,
+                       "y": 0,
+                       "width": 12,
+                       "height": 6,
+                       "properties": {
+                           "metrics": [
+                               [ "AWS/Lambda", "Invocations", "FunctionName", "${self:service}-${self:provider.stage}-producer", "Resource", "${self:service}-${self:provider.stage}-producer", { "label": "producer" } ],
+                               [ "...", "${self:service}-${self:provider.stage}-consumer", ".", "${self:service}-${self:provider.stage}-consumer", { "label": "consumer" } ]
+                           ],
+                           "view": "timeSeries",
+                           "stacked": false,
+                           "title": "Lambda - Invocations",
+                           "region": "eu-west-1",
+                           "stat": "Sum",
+                           "period": 10
+                       }
+                   },
+                   {
+                       "type": "metric",
+                       "x": 12,
+                       "y": 0,
+                       "width": 12,
+                       "height": 6,
+                       "properties": {
+                           "metrics": [
+                               [ "AWS/Lambda", "Errors", "FunctionName", "${self:service}-${self:provider.stage}-producer", "Resource", "${self:service}-${self:provider.stage}-producer", { "label": "producer" } ],
+                               [ "...", "${self:service}-${self:provider.stage}-consumer", ".", "${self:service}-${self:provider.stage}-consumer", { "label": "consumer" } ]
+                           ],
+                           "view": "timeSeries",
+                           "stacked": false,
+                           "title": "Lambdas - Errors",
+                           "region": "eu-west-1",
+                           "stat": "Sum",
+                           "period": 10
+                       }
+                   },
+                   {
+                       "type": "metric",
+                       "x": 0,
+                       "y": 6,
+                       "width": 12,
+                       "height": 6,
+                       "properties": {
+                           "metrics": [
+                               [ "AWS/Lambda", "Duration", "FunctionName", "${self:service}-${self:provider.stage}-producer", "Resource", "${self:service}-${self:provider.stage}-producer", { "label": "producer" } ],
+                               [ "...", "${self:service}-${self:provider.stage}-consumer", ".", "${self:service}-${self:provider.stage}-consumer", { "label": "consumer" } ]
+                           ],
+                           "view": "timeSeries",
+                           "stacked": false,
+                           "title": "Lambdas - Max Duration",
+                           "region": "eu-west-1",
+                           "stat": "Maximum",
+                           "period": 10
+                       }
+                   },
+                   {
+                       "type": "metric",
+                       "x": 12,
+                       "y": 6,
+                       "width": 12,
+                       "height": 6,
+                       "properties": {
+                           "metrics": [
+                               [ "AWS/SQS", "NumberOfMessagesReceived", "QueueName", "${self:custom.sqsName}" ]
+                           ],
+                           "view": "timeSeries",
+                           "stacked": false,
+                           "title": "SQS - Messages Received",
+                           "region": "eu-west-1",
+                           "stat": "Sum",
+                           "period": 10
+                       }
+                   },
+                   {
+                       "type": "metric",
+                       "x": 0,
+                       "y": 12,
+                       "width": 12,
+                       "height": 6,
+                       "properties": {
+                           "metrics": [
+                               [ "AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "${self:custom.ddbName}" ]
+                           ],
+                           "view": "timeSeries",
+                           "stacked": false,
+                           "title": "DynamoDB - Writes",
+                           "region": "eu-west-1",
+                           "stat": "Sum",
+                           "period": 10
+                       }
+                   },
+                   {
+                       "type": "metric",
+                       "x": 12,
+                       "y": 12,
+                       "width": 12,
+                       "height": 6,
+                       "properties": {
+                           "metrics": [
+                               [ { "expression": "m2-m1", "label": "nb messages", "id": "e1", "period": 10 } ],
+                               [ "AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "${self:custom.ddbName}", { "id": "m1", "visible": false } ],
+                               [ "AWS/SQS", "NumberOfMessagesReceived", "QueueName", "${self:custom.sqsName}", { "id": "m2", "visible": false } ]
+                           ],
+                           "view": "timeSeries",
+                           "stacked": false,
+                           "title": "Lost Messages",
+                           "region": "eu-west-1",
+                           "stat": "Sum",
+                           "period": 10
+                       }
+                   }
+               ]
+           }'
