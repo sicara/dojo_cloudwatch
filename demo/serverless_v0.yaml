@@ -1,0 +1,73 @@
+service:                        demo
+
+provider:
+  name:                         aws
+  region:                       eu-west-1
+  runtime:                      python3.7
+  stage:                        sandbox
+  role:                         arn:aws:iam::570916004030:role/dojoCW-lambdaRole
+  memorySize:                   128
+  timeout:                      10
+  tags:
+    OWNER:                      ${self:custom.owner_tag}
+
+custom:
+  var1:                         value1
+  owner_tag:                    DOJO_CW
+  sqsName:                      ${self:service}-sqs-${self:provider.stage}
+  s3Name:                       ${self:service}-s3-${self:provider.stage}
+  ddbName:                      ${self:service}-ddb-${self:provider.stage}
+
+functions:
+  producer:
+    description:                Produces tasks sent to SQS
+    handler:                    lambda/producer.handler
+    environment:
+      SQS_QUEUE_NAME:           ${self:custom.sqsName}
+    events:
+      - schedule:               cron(0 8 * * ? *)
+
+  consumer:
+    description:                Consumes & processes SQS message
+    handler:                    lambda/consumer.handler
+    environment:
+      ENV_VAR1:                 ${self:custom.var1}
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt:
+              - SQSDemo
+              - Arn
+          batchSize:            1
+
+resources:
+  Resources:
+    SQSDemo:
+      Type:                     AWS::SQS::Queue
+      Properties:
+        QueueName:              ${self:custom.sqsName}
+        VisibilityTimeout:      1800
+        Tags:
+          - Key:                OWNER
+            Value:              ${self:custom.owner_tag}
+    S3Demo:
+      Type:                     AWS::S3::Bucket
+      Properties:
+        BucketName:             ${self:custom.s3Name}
+        Tags:
+          - Key:                OWNER
+            Value:              ${self:custom.owner_tag}
+    DynamoDBDemo:
+      Type:                     AWS::DynamoDB::Table
+      Properties:
+        TableName:              ${self:custom.ddbName}
+        AttributeDefinitions:
+          - AttributeName:      "_id"
+            AttributeType:      "S"
+        KeySchema:
+          - AttributeName:      "_id"
+            KeyType:            "HASH"
+        BillingMode:            PAY_PER_REQUEST
+        Tags:
+          - Key:                OWNER
+            Value:              ${self:custom.owner_tag}
