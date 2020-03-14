@@ -14,7 +14,6 @@ provider:
 custom:
   owner_tag:                    DOJO_CW
   sqsName:                      ${self:service}-sqs-${self:provider.stage}
-  s3Name:                       ${self:service}-s3-${self:provider.stage}
   ddbName:                      ${self:service}-ddb-${self:provider.stage}
 
 functions:
@@ -29,6 +28,8 @@ functions:
   consumer:
     description:                Consumes & processes SQS message
     handler:                    lambda/consumer.handler
+    environment:
+      DDB_NAME:           ${self:custom.ddbName}
     events:
       - sqs:
           arn:
@@ -44,13 +45,6 @@ resources:
       Properties:
         QueueName:              ${self:custom.sqsName}
         VisibilityTimeout:      1800
-        Tags:
-          - Key:                OWNER
-            Value:              ${self:custom.owner_tag}
-    S3Demo:
-      Type:                     AWS::S3::Bucket
-      Properties:
-        BucketName:             ${self:custom.s3Name}
         Tags:
           - Key:                OWNER
             Value:              ${self:custom.owner_tag}

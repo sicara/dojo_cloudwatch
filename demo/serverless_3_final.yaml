@@ -14,7 +14,6 @@ provider:
 custom:
   owner_tag:                    DOJO_CW
   sqsName:                      ${self:service}-sqs-${self:provider.stage}
-  s3Name:                       ${self:service}-s3-${self:provider.stage}
   ddbName:                      ${self:service}-ddb-${self:provider.stage}
   dashboardName:                ${self:service}-dashboard-${self:provider.stage}
 
@@ -30,6 +29,8 @@ functions:
   consumer:
     description:                Consumes & processes SQS message
     handler:                    lambda/consumer.handler
+    environment:
+      DDB_NAME:           ${self:custom.ddbName}
     events:
       - sqs:
           arn:
@@ -45,13 +46,6 @@ resources:
       Properties:
         QueueName:              ${self:custom.sqsName}
         VisibilityTimeout:      1800
-        Tags:
-          - Key:                OWNER
-            Value:              ${self:custom.owner_tag}
-    S3Demo:
-      Type:                     AWS::S3::Bucket
-      Properties:
-        BucketName:             ${self:custom.s3Name}
         Tags:
           - Key:                OWNER
             Value:              ${self:custom.owner_tag}
@@ -142,7 +136,7 @@ resources:
                        "height": 6,
                        "properties": {
                            "metrics": [
-                               [ "AWS/SQS", "NumberOfMessagesReceived", "QueueName", "${self:custom.sqsName}" ]
+                               [ "AWS/SQS", "NumberOfMessagesReceived", "QueueName", "${self:custom.sqsName}", { "label": "nb messages" } ]
                            ],
                            "view": "timeSeries",
                            "stacked": false,
@@ -160,7 +154,7 @@ resources:
                        "height": 6,
                        "properties": {
                            "metrics": [
-                               [ "AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "${self:custom.ddbName}" ]
+                               [ "AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "${self:custom.ddbName}", { "label": "nb writes" } ]
                            ],
                            "view": "timeSeries",
                            "stacked": false,

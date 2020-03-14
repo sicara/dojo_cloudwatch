@@ -1,6 +1,7 @@
 import os
 import time
 import uuid
+from datetime import date
 from decimal import Decimal
 
 import boto3
@@ -23,5 +24,12 @@ def handler(event, context):
         "_created": Decimal(time.time()),
         "message": sqs_message
     }
+
+    # PROCESS 1 - INFRA ERROR
+    time.sleep(2 * int(sqs_message))
+
+    # PROCESS 2 - APPLI ERROR
+    if sqs_message == "3":
+        ddb_item["date"] = date.today()
 
     write_to_dynamodb(table_name=DDB_NAME, item=ddb_item)
